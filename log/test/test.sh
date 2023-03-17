@@ -1,2 +1,0 @@
-    CUDA_VISIBLE_DEVICES=5 \
-    python ../../main_iiw.py  -d /data/hdd01/cxx/remote/cxx/IIW/IIW/IIW/iiw-dataset --ms -s 128 --batch-size 2 --random-scale 2 --random-rotate 10 --epochs 30 --lr 0.007 --momentum 0.9 --lr-mode poly --workers 12 -c 1 -g 128
