@@ -571,7 +571,7 @@ def train_seg(args):
     if dist.get_rank() == 0:
         logger.info(f"rank = {args.local_rank}, batch_size == {batch_size}")
 
-    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize,args.guide_size)    
+    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize,guide_size=args.guide_size)    
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
 
     train_loader = torch.utils.data.DataLoader(
