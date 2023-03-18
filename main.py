@@ -121,7 +121,7 @@ def fill_up_weights(up):
 
 
 class SegMultiHeadList(torch.utils.data.Dataset):
-    def __init__(self, data_dir, phase, transforms, normalize, list_dir=None,guide_size=512):
+    def __init__(self, data_dir, phase, transforms, normalize, list_dir=None, guide_size=512):
         self.list_dir = data_dir if list_dir is None else list_dir
         self.data_dir = data_dir
         self.phase = phase
@@ -135,7 +135,6 @@ class SegMultiHeadList(torch.utils.data.Dataset):
         self.normalize = normalize
         self.read_lists()
         self.guide_size = guide_size
-
     def __getitem__(self, index):
         data = [Image.open(join(self.image_path, self.image_list[index]))]
         data = np.array(data[0])
@@ -159,7 +158,6 @@ class SegMultiHeadList(torch.utils.data.Dataset):
         hr_guide = torch.from_numpy(np.array(hr_guide)).permute(2,1,0).contiguous().float().div(255)
         data.append(self.normalize(hr_guide))            
         data[0] = self.normalize(data[0])
-
         return tuple(data)
 
     def __len__(self):
@@ -280,9 +278,7 @@ def validate(val_loader, model, criterion, train_writer, eval_score=None, print_
             for idx in range(len(images)):
                 image_var = Variable(images[idx], requires_grad=False)
                 image_var = image_var.cuda()
-                lr_image_var = Variable(lr_images[idx], requires_grad=False)
-                lr_image_var = lr_image_var.cuda()
-                output, guide = model(image_var, image_var, lr_image_var)
+                output, guide = model(image_var, image_var, continous=False)
                 guide_array = list()
                 output_array = list()
                 guide_array.append(guide.data)
@@ -571,7 +567,7 @@ def train_seg(args):
     if dist.get_rank() == 0:
         logger.info(f"rank = {args.local_rank}, batch_size == {batch_size}")
 
-    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize,guide_size=args.guide_size)    
+    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize, guide_size=args.guide_size)    
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
 
     train_loader = torch.utils.data.DataLoader(
@@ -772,7 +768,6 @@ def test_ms(eval_data_loader, model, num_classes, scales,
         
         h, w = input_data[0].size()[2:4]
         images = input_data[-2*num_scales:-num_scales]
-        lr_images = input_data[-num_scales:]
 
         outputs = []
 
@@ -780,9 +775,7 @@ def test_ms(eval_data_loader, model, num_classes, scales,
             for idx in range(len(images)):
                 image_var = Variable(images[idx], requires_grad=False)
                 image_var = image_var.cuda()
-                lr_image_var = Variable(lr_images[idx], requires_grad=False)
-                lr_image_var = lr_image_var.cuda()
-                output, guide = model(image_var, image_var, lr_image_var)
+                output, guide = model(image_var, image_var, continous=False)
                 final_array = list()
                 final_array.append(guide.data)
                 outputs.append(final_array)
