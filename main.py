@@ -121,7 +121,7 @@ def fill_up_weights(up):
 
 
 class SegMultiHeadList(torch.utils.data.Dataset):
-    def __init__(self, data_dir, phase, transforms, normalize, list_dir=None):
+    def __init__(self, data_dir, phase, transforms, normalize, list_dir=None,guide_size=512):
         self.list_dir = data_dir if list_dir is None else list_dir
         self.data_dir = data_dir
         self.phase = phase
@@ -134,6 +134,7 @@ class SegMultiHeadList(torch.utils.data.Dataset):
         self.scale = 2
         self.normalize = normalize
         self.read_lists()
+        self.guide_size = guide_size
 
     def __getitem__(self, index):
         data = [Image.open(join(self.image_path, self.image_list[index]))]
@@ -154,7 +155,7 @@ class SegMultiHeadList(torch.utils.data.Dataset):
 
         hr_guide = data[0].detach().cpu().numpy().transpose(2,1,0)*255
         hr_guide = Image.fromarray(hr_guide.astype(np.uint8))
-        hr_guide = hr_guide.resize((512, 512), Image.BICUBIC)
+        hr_guide = hr_guide.resize((self.guide_size, self.guide_size), Image.BICUBIC)
         hr_guide = torch.from_numpy(np.array(hr_guide)).permute(2,1,0).contiguous().float().div(255)
         data.append(self.normalize(hr_guide))            
         data[0] = self.normalize(data[0])
@@ -570,7 +571,7 @@ def train_seg(args):
     if dist.get_rank() == 0:
         logger.info(f"rank = {args.local_rank}, batch_size == {batch_size}")
 
-    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize)    
+    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize,args.guide_size)    
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
 
     train_loader = torch.utils.data.DataLoader(
@@ -923,7 +924,7 @@ def parse_args():
     parser.add_argument('cmd', choices=['train', 'test'])
     parser.add_argument('-d', '--data-dir', default='../dataset/nyud2')
     parser.add_argument('-s', '--crop-size', default=0, type=int)
-    parser.add_argument('-g', '--guide-size', default=0, type=int)
+    parser.add_argument('-g', '--guide-size', default=512, type=int)
     parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--arch')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
