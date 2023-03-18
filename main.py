@@ -121,11 +121,9 @@ def fill_up_weights(up):
 
 
 class SegMultiHeadList(torch.utils.data.Dataset):
-    def __init__(self, data_dir, phase, transforms, normalize,
-                list_dir=None, out_name=False, guide=False):
+    def __init__(self, data_dir, phase, transforms, normalize, list_dir=None):
         self.list_dir = data_dir if list_dir is None else list_dir
         self.data_dir = data_dir
-        self.out_name = out_name
         self.phase = phase
         self.transforms = transforms
         self.image_path = None
@@ -135,7 +133,6 @@ class SegMultiHeadList(torch.utils.data.Dataset):
         self.size = 0
         self.scale = 2
         self.normalize = normalize
-        self.guide = guide
         self.read_lists()
 
     def __getitem__(self, index):
@@ -155,22 +152,11 @@ class SegMultiHeadList(torch.utils.data.Dataset):
         data.append(label_data)
         data = list(self.transforms(*data))
 
-        if self.out_name:
-            if self.label_list is None:
-                data.append(data[0][0, :, :])
-            data.append(self.image_list[index])
-        if self.guide:
-            hr_guide = data[0].detach().cpu().numpy().transpose(2,1,0)*255
-            hr_guide = Image.fromarray(hr_guide.astype(np.uint8))
-            hr_guide = hr_guide.resize((512, 512), Image.BICUBIC)
-            hr_guide = torch.from_numpy(np.array(hr_guide)).permute(2,1,0).contiguous().float().div(255)
-            data.append(self.normalize(hr_guide))            
-        else:
-            lr_data = data[0].detach().cpu().numpy().transpose(2,1,0)*255
-            lr_image = Image.fromarray(lr_data.astype(np.uint8))
-            lr_image = lr_image.resize((data[0].shape[1]//self.scale, data[0].shape[2]//self.scale), Image.BICUBIC)
-            lr_image = torch.from_numpy(np.array(lr_image)).permute(2,1,0).contiguous().float().div(255)
-            data.append(self.normalize(lr_image))
+        hr_guide = data[0].detach().cpu().numpy().transpose(2,1,0)*255
+        hr_guide = Image.fromarray(hr_guide.astype(np.uint8))
+        hr_guide = hr_guide.resize((512, 512), Image.BICUBIC)
+        hr_guide = torch.from_numpy(np.array(hr_guide)).permute(2,1,0).contiguous().float().div(255)
+        data.append(self.normalize(hr_guide))            
         data[0] = self.normalize(data[0])
 
         return tuple(data)
@@ -432,7 +418,7 @@ def train(train_loader, model, criterion, optimizer, epoch, local_rank, train_wr
 
     end = time.time()
 
-    for i, (input, target, lr_img) in enumerate(train_loader):
+    for i, (input, target, guide_input) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -440,22 +426,21 @@ def train(train_loader, model, criterion, optimizer, epoch, local_rank, train_wr
             input = input[0]
         if isinstance(target, list):
             target = target[0]
-        if isinstance(lr_img, list):
-            lr_img = lr_img[0]
+        if isinstance(guide_input, list):
+            guide_input = guide_input[0]
 
         input = input.clone().cuda(local_rank, non_blocking=True)
-        lr_img = lr_img.clone().cuda(local_rank, non_blocking=True)
         input = torch.autograd.Variable(input)
-        lr_img = torch.autograd.Variable(lr_img)
-
+        guide_input = guide_input.clone().cuda(local_rank, non_blocking=True)
+        guide_input = torch.autograd.Variable(input)
         target = target.clone().cuda(local_rank, non_blocking=True)
         target = torch.autograd.Variable(target)
 
         # compute output
         if transfer_model is None:
-            output, guide = model(input, input, lr_img)
+            output, guide = model(input, guide_input, continous=False)
         elif transfer_model is not None:
-            _, features = model(input, input)
+            _, features = model(input, guide_input)
             output = transfer_model(features)
 
         softmaxf = nn.LogSoftmax()
@@ -519,14 +504,13 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         shutil.copyfile(filename, 'model_best_bs8.pth.tar')
 
 
-def train_seg(local_rank, args):
+def train_seg(args):
     
     # add dist: init #
-    args.local_rank = local_rank
-    #dist.init_process_group(backend='nccl', init_method='env://')
     dist.init_process_group(backend='nccl')
     torch.cuda.set_device(args.local_rank)
     # add dist: dist batch #
+    assert args.local_rank == dist.get_rank()
     batch_size = args.batch_size
 
     if args.local_rank == 0:
@@ -547,7 +531,7 @@ def train_seg(local_rank, args):
     crop_size = args.crop_size
     if(args.train_data == 'PASCAL'):
         num_classes = 60
-        train_data = 'datasets'
+        train_data = 'PASCALContext'
     if(args.train_data == 'ade20k'):
         num_classes = 150
         train_data = 'ade20k'
@@ -558,17 +542,17 @@ def train_seg(local_rank, args):
         print(k, ':', v)
     
     single_model = DPF(num_classes)
-    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(single_model).cuda(local_rank)
+    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(single_model).cuda(args.local_rank)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], find_unused_parameters=True, broadcast_buffers=True)
 
 
         
     criterion = nn.NLLLoss2d(ignore_index=255)
-    criterion.cuda(local_rank)
+    criterion.cuda(args.local_rank)
 
     # Data loading code
     data_dir = join(args.data_dir, train_data)
-    info = json.load(join(data_dir, 'info.json'), 'r')
+    info = json.load(open(join(data_dir, 'info.json'), 'r'))
     normalize = transforms.Normalize(mean=info['mean'],
                                      std=info['std'])
     t = []
@@ -584,9 +568,9 @@ def train_seg(local_rank, args):
 
     # dist: add train-sampler #
     if dist.get_rank() == 0:
-        logger.info(f"rank = {local_rank}, batch_size == {batch_size}")
+        logger.info(f"rank = {args.local_rank}, batch_size == {batch_size}")
 
-    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize, guide=False)    
+    train_set = SegMultiHeadList(data_dir, 'train', transforms.Compose(t), normalize=normalize)    
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set)
 
     train_loader = torch.utils.data.DataLoader(
@@ -889,16 +873,10 @@ def test_seg(args):
     normalize = transforms.Normalize(mean=info['mean'], std=info['std'])
     scales = [1]#[0.9, 1, 1.25]
 
-    if args.ms:
-        dataset = SegListMSMultiHead(data_dir, phase, transforms.Compose([
-            transforms.ToTensorMultiHead(),
-            normalize,
-        ]), scales)
-    else:
-        dataset = SegMultiHeadList(data_dir, phase, transforms.Compose([
-            transforms.ToTensorMultiHead(),
-            normalize
-        ]), out_name=True)
+    dataset = SegListMSMultiHead(data_dir, phase, transforms.Compose([
+        transforms.ToTensorMultiHead(),
+        normalize,
+    ]), scales)
     test_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size, shuffle=False, num_workers=num_workers,
@@ -1001,7 +979,7 @@ def main():
     args = parse_args()
     print(os.environ['MASTER_PORT'])
     if args.cmd == 'train':
-        train_seg(args.local_rank, args)
+        train_seg(args)
     elif args.cmd == 'test':
         test_seg(args)
 
