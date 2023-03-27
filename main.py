@@ -971,7 +971,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    print(os.environ['MASTER_PORT'])
+    #print(os.environ['MASTER_PORT'])
     if args.cmd == 'train':
         train_seg(args)
     elif args.cmd == 'test':
