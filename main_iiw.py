@@ -335,7 +335,7 @@ def train_iiw(args):
     
     
     val_loader = torch.utils.data.DataLoader(
-            IIWDataset(data_dir=data_dir,split= 'train',transforms= transforms.Compose(naive_t),guide_size=guide_size),
+            IIWDataset(data_dir=data_dir,split= 'test',transforms= transforms.Compose(naive_t),guide_size=guide_size),
         batch_size=1, shuffle=False, num_workers=num_workers,
         pin_memory=True, drop_last=True,collate_fn = my_collate_fn
     )
