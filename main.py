@@ -842,7 +842,7 @@ def test_seg(args):
     phase = args.phase
     if(args.train_data == 'PASCAL'):
         num_classes = 60
-        train_data = 'datasets'
+        train_data = 'PASCALContext'
     if(args.train_data == 'ade20k'):
         num_classes = 150
         train_data = 'ade20k'
