@@ -1,5 +1,8 @@
 # DPF: Learning Dense Prediction Fields with Weak Supervision
 
+Paper Accepted to CVPR 2022.
+
+
 ## Introduction
 Nowadays, many visual scene understanding problems are addressed by dense prediction networks. But pixel-wise dense annotations are very expensive (e.g., for scene parsing) or impossible (e.g., for intrinsic image decomposition), motivating us to leverage cheap point-level weak supervision. However, existing pointly-supervised methods still use the same architecture designed for full supervision. In stark contrast to them, we propose a new paradigm that makes predictions for point coordinate queries, as inspired by the recent success of implicit representations, like distance or radiance fields. As such, the method is named as dense prediction fields (DPFs). DPFs generate expressive intermediate features for continuous sub-pixel locations, thus allowing outputs of an arbitrary resolution. DPFs are naturally compatible with point-level supervision. We showcase the effectiveness of DPFs using two substantially different tasks: high-level semantic parsing and low-level intrinsic image decomposition. In these two cases, supervision comes in the form of single-point semantic category and two-point relative reflectance, respectively. As benchmarked by three large-scale public datasets PascalContext, ADE20k and IIW, DPFs set new state-of-the-art performance on all of them with significant margins.
 
@@ -44,6 +47,13 @@ Unzip them and the folder should have the following hierarchy:
 #### Intrinsic Decomposition
 
 Download iiw dataset from [HERE](labelmaterial.s3.amazonaws.com/release/iiw_dataset-release-0.zip). Unzip it directly and merge it with the current ++iiw_dataset++ folder.
+
+
+
+## Pretrained model
+
+You can download corresponding pre-trained models from [ADE20K](https://drive.google.com/file/d/1RAFiofKlSo3w-R4Jn8P8HrZWwIX2y5Bk/view?usp=share_link) ,[PASCALContext](https://drive.google.com/file/d/1LiVHAPRzlhc4owsx_y7sS92HDXbqmbXH/view?usp=share_link) and [IIW](https://drive.google.com/file/d/1EYX5nHDbTYsTMRiDHSiLEvV6jTrKhfC4/view?usp=share_link).
+
 
 ## Training and evaluating
 
