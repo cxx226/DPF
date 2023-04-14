@@ -1,6 +1,6 @@
 # DPF: Learning Dense Prediction Fields with Weak Supervision
 
-Paper Accepted to CVPR 2023.
+[Paper](https://arxiv.org/abs/2303.16890) Accepted to CVPR 2023.
 
 
 ## Introduction
